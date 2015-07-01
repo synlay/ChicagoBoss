@@ -43,20 +43,27 @@ json_data1([{VariableName, [First|_] = Variable}|Rest], ModelList, Acc) when is_
     end;
 
 json_data1([{VariableName, [[{_, _}|_]|_] = Variable}|Rest], ModelList, Acc) ->
-    json_data1(Rest, ModelList, [{VariableName, lists:map(fun(Item) -> 
+    json_data1(Rest, ModelList, [{VariableName, lists:map(fun(Item) ->
                             json_data1(Item, ModelList, [])
                     end, Variable)}|Acc]);
 
-%% It's an erlang:now() value.
+%% OLD: It's an erlang:now() value.
+%% New: Assume that for now {A, B, C} represents date() values and timestamps are not supported for now or will be
+%%      wrapped as integer epoch seconds. See OSP-37 for more infos on how to fix this.
 json_data1([{VariableName, {A, B, C} = Val}|Rest], ModelList, Acc) when is_integer(A), is_integer(B), is_integer(C) ->
-    json_data1(Rest, ModelList, [{VariableName, iso8601:format(Val)}|Acc]);
+    json_data1(Rest, ModelList, [{VariableName, iso8601:format({Val, {0, 0, 0}})}|Acc]);
 json_data1([{VariableName, Variable}|Rest], ModelList, Acc) ->
     case boss_model_manager:is_model_instance (Variable, ModelList) of
-        true -> 
+        true ->
             json_data1(Rest, ModelList, [{VariableName, boss_model_manager:to_json(Variable)}|Acc]);
-        false -> 
+        false ->
             case Variable of
+                {Y,Mo,D} when is_integer(Y), is_integer(Mo), is_integer(D) ->
+                    %% date(); timestamps will be handled via epoch seconds for now. See OSP-37 for more infos on how
+                    %%         to fix this proper.
+                    json_data1(Rest, ModelList, [{VariableName, iso8601:format({Variable, {0, 0, 0}})}|Acc]);
                 {{Y,Mo,D}, {_H,_Mn,_S}} when is_integer(Y), is_integer(Mo), is_integer(D) ->
+                    %% datetime()
                     json_data1(Rest, ModelList, [{VariableName, iso8601:format(Variable)}|Acc]);
                 _Other ->
                     json_data1(Rest, ModelList, [{VariableName, Variable}|Acc])
