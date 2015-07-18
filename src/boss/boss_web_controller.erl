@@ -71,9 +71,9 @@ init(Config) ->
     ThisNode					         = erlang:node(),
     Env						             = boss_web_controller_init:init_services(),
     {ok,MasterNode}				         = boss_web_controller_init:init_master_node(Env, ThisNode),
-    
+
     boss_web_controller_init:init_mail_service(),
-    RouterAdapter                        = boss_env:router_adapter(), 
+    RouterAdapter                        = boss_env:router_adapter(),
 
     {RequestMod, ResponseMod, ServerMod} = init_web_server_options(),
     {SSLEnable, SSLOptions}			     = boss_web_controller_init:init_ssl(),
@@ -82,10 +82,10 @@ init(Config) ->
     Pid						             = boss_web_controller_init:init_webserver(
                                                 ThisNode, MasterNode, ServerMod, SSLEnable,
 											    SSLOptions, ServicesSupPid, ServerConfig),
-    {ok, #state{ 
+    {ok, #state{
                 router_adapter  = RouterAdapter,
-                service_sup_pid = ServicesSupPid, 
-                http_pid        = Pid, 
+                service_sup_pid = ServicesSupPid,
+                http_pid        = Pid,
                 is_master_node  = (ThisNode =:= MasterNode) }, 0}.
 
 init_server_config(Config, RequestMod, ResponseMod, RouterAdapter) ->
@@ -95,8 +95,8 @@ init_server_config(Config, RequestMod, ResponseMod, RouterAdapter) ->
 
 handle_info(timeout, #state{service_sup_pid = ServicesSupPid} = State) ->
     Applications	= boss_env:get_env(applications, []),
-    AppInfoList     = boss_web_controller_util:start_boss_applications(Applications, 
-                                                                       ServicesSupPid, 
+    AppInfoList     = boss_web_controller_util:start_boss_applications(Applications,
+                                                                       ServicesSupPid,
                                                                        State),
     case boss_env:get_env(server, ?DEFAULT_WEB_SERVER) of
         cowboy ->
@@ -199,7 +199,7 @@ stop_init_scripts(Application, InitData) ->
                            ScriptInitData ->
                                catch Module:stop(ScriptInitData)
                        end;
-                   Error -> error_logger:error_msg("Compilation of ~p failed: ~p~n", [File, Error])
+                   Error -> lager:error("Compilation of ~p failed: ~p", [File, Error])
                 end
         end, ok, boss_files:init_file_list(Application)).
 
@@ -214,7 +214,7 @@ process_compile_result(File, Acc, {ok, Module}) ->
     InitResult =  Module:init(),
     init_result(File, Acc, Module, InitResult);
 process_compile_result(File, Acc, Error) ->
-    error_logger:error_msg("Compilation of ~p failed: ~p~n", [File, Error]),
+    lager:error("Compilation of ~p failed: ~p", [File, Error]),
     Acc.
 
 init_result(_File, Acc, Module, {ok, Info}) ->
@@ -222,7 +222,7 @@ init_result(_File, Acc, Module, {ok, Info}) ->
 init_result(_File, Acc, Module, ok) ->
     [{Module, true}|Acc];
 init_result(File, Acc, _Module,Error) ->
-    error_logger:error_msg("Execution of ~p failed: ~p~n", [File, Error]),
+    lager:error("Execution of ~p failed: ~p", [File, Error]),
     Acc.
 
 generate_session_id(Request) ->
@@ -269,7 +269,7 @@ execute_action_inner(Controller, Action, Tokens, Location, AppInfo,
     % pair exists. this prevents a memory leak due to atom creation.
     Adapters                            = [boss_controller_adapter_pmod,
                                            boss_controller_adapter_elixir],
-   
+
     Adapter                             = make_action_adapter(Controller, AppInfo, Adapters),
     SessionID1                          = make_action_session_id(Controller, AppInfo, Req,
 						                 SessionID, Adapter),
@@ -279,11 +279,11 @@ execute_action_inner(Controller, Action, Tokens, Location, AppInfo,
 					   {method, RequestMethod},
                                            {action, Action},
                                            {tokens, Tokens}],
-    AdapterInfo                         = Adapter:init(AppInfo#boss_app_info.application, 
+    AdapterInfo                         = Adapter:init(AppInfo#boss_app_info.application,
 						       Controller,
-                                                       AppInfo#boss_app_info.controller_modules, 
+                                                       AppInfo#boss_app_info.controller_modules,
 						       RequestContext1),
-    
+
     RequestContext2                     = [{controller_module, element(1, AdapterInfo)}|RequestContext1],
     {ActionResult, RequestContext3}     = apply_action(Req, Adapter,
 						       AdapterInfo,
@@ -291,8 +291,8 @@ execute_action_inner(Controller, Action, Tokens, Location, AppInfo,
     RenderedResult                      = boss_web_controller_render:render_result(Location, AppInfo, RequestContext,
 							                           LocationTrail, Adapter, AdapterInfo,
 							                           ActionResult, RequestContext3),
-    FinalResult                         = apply_after_filters(Adapter, 
-							      AdapterInfo, 
+    FinalResult                         = apply_after_filters(Adapter,
+							      AdapterInfo,
 							      RequestContext3,
 							      RenderedResult),
     {FinalResult, SessionID1}.
@@ -304,7 +304,7 @@ apply_action(Req, Adapter, AdapterInfo, RequestContext2) ->
 					 'HEAD' -> 'GET';
 					 Method -> Method
 				     end,
-	  
+
             RequestContext = lists:keyreplace(method, 1, RC3, {method, EffectiveRequestMethod}),
 	    {call_controller_action(Adapter, AdapterInfo, RequestContext),
 	     RC3};
@@ -330,7 +330,7 @@ make_action_session_id(Controller, AppInfo, Req, undefined, Adapter) ->
     end;
 make_action_session_id(_Controller, _AppInfo, _Req, SessionID, _Adapter) ->
     SessionID.
-    
+
 
 make_action_adapter(Controller, AppInfo, Adapters) ->
     lists:foldl(fun

@@ -24,11 +24,10 @@ start(Options) ->
 stop() ->
     ok.
 
-reload(Pid) ->	
+reload(Pid) ->
     gen_server:call(Pid, reload).
 
 route(Pid, Url) ->
-	error_logger:info_msg("Route: ~pUrl~n~p",[Url, erlang:get_stacktrace()]),
     gen_server:call(Pid, {route, Url}).
 
 unroute(Pid, Application, ControllerList, Controller, undefined, Params) ->
