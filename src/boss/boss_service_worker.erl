@@ -18,7 +18,7 @@
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
 	 terminate/2, code_change/3]).
 
--define(SERVER, ?MODULE). 
+-define(SERVER, ?MODULE).
 
 -record(state, {handler, internal}).
 %% TODO: Fix specs (They are real bugs I think)
@@ -81,11 +81,11 @@ init([Handler, ServiceUrl]) when is_atom(Handler) ->
 	    boss_websocket_router:register(ServiceUrl, Handler),
 	    {ok, #state{handler=Handler, internal=Internal}}
     catch Class:Reason ->
-	    error_logger:error_msg(
+	    lager:error(
 	      "** Boss Service Handler ~p terminating in init/0~n"
 	      "   for the reason ~p:~p~n"
 	      "** Stacktrace: ~p~n~n",
-	      [Handler, Class, Reason, erlang:get_stacktrace()])	
+	      [Handler, Class, Reason, erlang:get_stacktrace()])
     end.
 
 
@@ -119,7 +119,7 @@ handle_call(_Request, _From, State) ->
 %%--------------------------------------------------------------------
 handle_cast({join_service, ServiceUrl, WebSocketId, Req, SessionId}, State) ->
     #state{handler=Handler, internal=Internal} = State,
-    try 
+    try
 	apply_function_with_default({Handler, Req, SessionId}, handle_join,
                              [ServiceUrl, WebSocketId, Internal], {noreply, Internal}) of
 	{noreply, NewInternal} ->
@@ -131,7 +131,7 @@ handle_cast({join_service, ServiceUrl, WebSocketId, Req, SessionId}, State) ->
 	    {stop, InternalReason, #state{handler=Handler, internal=NewInternal}}
 
 	catch Class:Reason ->
-		error_logger:error_msg(
+        lager:error(
 		  "** Boss Service Handler ~p terminating in join/0~n"
 		  "   for the reason ~p:~p~n"
   		  "ServiceUrl: ~p~n"
@@ -143,20 +143,20 @@ handle_cast({join_service, ServiceUrl, WebSocketId, Req, SessionId}, State) ->
 		   SessionId, Internal, erlang:get_stacktrace()])
 	end;
 
-handle_cast({terminate_service, Reason, ServiceUrl, WebSocketId, Req, SessionId}, State) ->   
-    #state{handler=Handler, internal=Internal} = State,    
+handle_cast({terminate_service, Reason, ServiceUrl, WebSocketId, Req, SessionId}, State) ->
+    #state{handler=Handler, internal=Internal} = State,
     try apply_function_with_default({Handler, Req, SessionId}, handle_close,
                                     [Reason, ServiceUrl, WebSocketId, Internal], {noreply, Internal}) of
 	{noreply, NewInternal} ->
 	    {noreply, #state{handler=Handler, internal=NewInternal}};
 	{noreply, NewInternal, Timeout} ->
 	    {noreply, #state{handler=Handler, internal=NewInternal}, Timeout};
-	
+
 	{stop, InternalReason, NewInternal} ->
 	    {stop, InternalReason, #state{handler=Handler, internal=NewInternal}}
-		
+
     catch Class:Reason ->
-	    error_logger:error_msg(
+        lager:error(
 	      "** Handler ~p terminating in init/0~n"
 	      "   for the reason ~p:~p~n"
 	      "ServiceUrl: ~p~n"
@@ -165,12 +165,12 @@ handle_cast({terminate_service, Reason, ServiceUrl, WebSocketId, Req, SessionId}
 	      "State    : ~p~n"
 	      "** Stacktrace: ~p~n~n",
 	      [Handler, Class, Reason, ServiceUrl, WebSocketId,
-	       SessionId, Internal, erlang:get_stacktrace()])	
+	       SessionId, Internal, erlang:get_stacktrace()])
     end;
 
 handle_cast({incoming_msg, ServiceUrl, WebSocketId, Req, SessionId, Message}, State) ->
     #state{handler=Handler, internal=Internal} = State,
-    try apply_function_with_default({Handler, Req, SessionId}, handle_incoming, 
+    try apply_function_with_default({Handler, Req, SessionId}, handle_incoming,
                                     [ServiceUrl, WebSocketId, Message, Internal],
                                    {noreply, Internal}) of
 	{noreply, NewInternal} ->
@@ -178,9 +178,9 @@ handle_cast({incoming_msg, ServiceUrl, WebSocketId, Req, SessionId, Message}, St
 	{noreply, NewInternal, Timeout} ->
 	    {noreply, #state{handler=Handler, internal=NewInternal}, Timeout};
 	{stop, _Reason, NewInternal} ->
-	    {stop, _Reason, #state{handler=Handler, internal=NewInternal}}		
+	    {stop, _Reason, #state{handler=Handler, internal=NewInternal}}
     catch Class:Reason ->
-	    error_logger:error_msg(
+        lager:error(
 	      "** Boss Service Handler ~p terminating in handle_incoming/4~n"
 	      "   for the reason ~p:~p~n"
 	      "ServiceUrl: ~p~n"
@@ -190,7 +190,7 @@ handle_cast({incoming_msg, ServiceUrl, WebSocketId, Req, SessionId, Message}, St
 	      "State    : ~p~n"
 	      "** Stacktrace: ~p~n~n",
 	      [Handler, Class, Reason, ServiceUrl, WebSocketId,
-	       SessionId, Message, Internal, erlang:get_stacktrace()])	
+	       SessionId, Message, Internal, erlang:get_stacktrace()])
     end;
 
 handle_cast({broadcast, Message}, State) ->
@@ -204,7 +204,7 @@ handle_cast({broadcast, Message}, State) ->
 	{stop, _Reason, NewInternal} ->
 	    {stop, _Reason, #state{handler=Handler, internal=NewInternal}}
     catch Class:Reason ->
-	    error_logger:error_msg(
+        lager:error(
 	      "** Boss Service Handler ~p terminating in broadcast~n"
 	      "   for the reason ~p:~p~n"
 	      "Message    : ~p~n"
@@ -228,7 +228,7 @@ handle_cast(_Msg, State) ->
 %%--------------------------------------------------------------------
 handle_info(_Info, State) ->
     #state{handler=Handler, internal=Internal} = State,
-    try apply_function_with_default({Handler, undefined, undefined}, handle_info, 
+    try apply_function_with_default({Handler, undefined, undefined}, handle_info,
                                     [_Info, Internal], {noreply, Internal}) of
 	{noreply, NewInternal} ->
 	    {noreply, #state{handler=Handler, internal=NewInternal}};
@@ -237,11 +237,11 @@ handle_info(_Info, State) ->
 	{stop, InternalReason, NewInternal} ->
 	    {stop, InternalReason, #state{handler=Handler, internal=NewInternal}}
     catch Class:Reason ->
-	    error_logger:error_msg(
+        lager:error(
 	      "** Handler ~p terminating in handle_info/2~n"
 	      "   for the reason ~p:~p~n"
 	      "** Stacktrace: ~p~n~n",
-	      [Handler, Class, Reason, erlang:get_stacktrace()])	
+	      [Handler, Class, Reason, erlang:get_stacktrace()])
     end.
 
 %% handle_info(_Info, State) ->
@@ -265,11 +265,11 @@ terminate(_Reason, _State) ->
 	ok ->
 	    ok
     catch Class:Reason ->
-	    error_logger:error_msg(
+        lager:error(
 	      "** Boss Service Handler ~p terminating in handle_info/0~n"
 	      "   for the reason ~p:~p~n"
 	      "** Stacktrace: ~p~n~n",
-	      [Handler, Class, Reason, erlang:get_stacktrace()])	
+	      [Handler, Class, Reason, erlang:get_stacktrace()])
     end.
 
 %%--------------------------------------------------------------------

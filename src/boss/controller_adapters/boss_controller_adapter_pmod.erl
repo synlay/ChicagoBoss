@@ -6,7 +6,7 @@
 -spec get_instance({atom() | tuple(),[any()]},[any()]) -> any().
 -spec accept(_,_,[any()]) -> boolean().
 -spec wants_session(_,_,_) -> boolean().
--spec init(types:application(),types:controller(),[types:controller()],_) -> 
+-spec init(types:application(),types:controller(),[types:controller()],_) ->
     {module(),[{_,_}]}.
 -spec filters(atom() | string() | number(),{atom() | tuple(),[any()]},[any()],_) -> any().
 -spec before_filter({atom() | tuple(),[any()]},[any()]) -> any().
@@ -42,7 +42,7 @@ filters(Type, {_, ExportStrings} = Info, RequestContext, GlobalFilters) ->
     ControllerInstance = get_instance(Info, RequestContext),
     FunctionString = lists:concat([Type, "_filters"]),
     case proplists:get_value(FunctionString, ExportStrings) of
-        3 -> 
+        3 ->
             FunctionAtom = list_to_atom(FunctionString),
             ControllerInstance:FunctionAtom(GlobalFilters, RequestContext);
         _ -> GlobalFilters
@@ -88,8 +88,7 @@ action({_, ExportStrings} = Info, RequestContext) ->
     Tokens		= proplists:get_value(tokens, RequestContext),
     AuthInfo		= proplists:get_value('_before', RequestContext, RequestContext),
     ActionAtom          = list_to_atom(Action),
-    lager:notice("Request Method ~p~n", [RequestMethod]),
-    lager:notice("Tokens ~p", [Tokens]),
+
     case proplists:get_value(Action, ExportStrings) of
         3 ->
             ControllerInstance:ActionAtom(RequestMethod, Tokens);
