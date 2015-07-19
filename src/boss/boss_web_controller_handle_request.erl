@@ -95,7 +95,7 @@ dev_headers(Response, development) ->
     Response:header("Cache-Control", "no-cache");
 dev_headers(Response, _) ->
     Response.
-
+    
 
 make_etag(App, StaticPrefix, File) ->
 	Priv = case code:priv_dir(App) of
@@ -125,6 +125,7 @@ build_dynamic_response(App, Request, Response, Url, RouterAdapter) ->
     TranslatorPid	= boss_web:translator_pid(App),
     RouterPid		= boss_web:router_pid(App),
     ControllerList	= boss_files:web_controller_list(App),
+    DynamicRequestProcessedHook = boss_env:dynamic_request_processed_hook(),
     TR              = set_timer(Request,
                                 Url,
                                 Mode,
@@ -139,6 +140,7 @@ build_dynamic_response(App, Request, Response, Url, RouterAdapter) ->
     RequestMethod	= Request:request_method(),
     FullUrl		= Request:path(),
     ErrorArgs		= [RequestMethod, FullUrl, App, StatusCode, Time div 1000],
+    _ = DynamicRequestProcessedHook(App, Request, StatusCode, Time),
     log_status_code(StatusCode, ErrorFormat, ErrorArgs),
     Response1		= (Response:status_code(StatusCode)):data(Payload),
     Response2		= lists:foldl(fun({K, V}, Acc) ->
@@ -474,7 +476,7 @@ load_and_execute(development,
     Res  = fold_operations(Application, Ops),
     run_controller(Controller, Location, AppInfo, Application,
                           RequestContext, SessionID, Res).
-
+    
 
 run_controller(Controller, Location, AppInfo, Application,
                RequestContext, SessionID, {ok,Controllers}) ->

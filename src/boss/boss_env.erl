@@ -3,6 +3,7 @@
 -export([boss_env/0, setup_boss_env/0, get_env/2, get_env/3]).
 -export([master_node/0, is_master_node/0, is_developing_app/1]).
 -export([router_adapter/0, cache_adapter/0, session_adapter/0, mq_adapter/0]).
+-export([dynamic_request_processed_hook/0]).
 
 -spec boss_env() -> any().
 boss_env() ->
@@ -12,11 +13,11 @@ boss_env() ->
     end.
 
 -spec setup_boss_env() -> types:execution_mode().
-setup_boss_env() ->	
+setup_boss_env() ->
     case boss_load:module_is_loaded(reloader) of
         true  -> put(boss_environment, development), development;
         false -> put(boss_environment, production), production
-    end.			
+    end.
 
 -spec get_env(atom(),atom(),any()) -> any().
 get_env(App, Key, Default) when is_atom(App), is_atom(Key) ->
@@ -62,3 +63,17 @@ session_adapter() ->
 -spec mq_adapter() -> atom().
 mq_adapter() ->
 	get_env(mq_adapter, tinymq).
+
+-spec dynamic_request_processed_hook() -> fun((App, Request, StatusCode, Time) -> Response) when
+    App        :: types:application(),
+    Request    :: tuple(),
+    StatusCode :: non_neg_integer(),
+    Time       :: non_neg_integer(),
+    Response   :: any().
+dynamic_request_processed_hook() ->
+	case get_env(dynamic_request_processed_hook, undefined) of
+        {M, F, Args} ->
+            fun (App, Request, StatusCode, Time) -> erlang:apply(M, F, [App, Request, StatusCode, Time | Args]) end;
+        undefined ->
+            fun (_App, _Request, _StatusCode, _Time) -> ok end
+    end.
