@@ -342,7 +342,8 @@ make_action_adapter(Controller, AppInfo, Adapters) ->
 		    (_, Acc) -> Acc
                 end, false, Adapters).
 
-process_before_filter_result({ok, Context}, _) -> {ok, Context};
+process_before_filter_result({ok, Context}, _OldContext) -> {ok, Context};
+process_before_filter_result({ok, Context, ControllerReturn}, _OldContext) -> {not_ok, Context, ControllerReturn};
 process_before_filter_result(NotOK, Context) -> {not_ok, Context, NotOK}.
 
 filter_config(Filter) ->
