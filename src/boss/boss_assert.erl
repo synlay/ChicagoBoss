@@ -111,10 +111,11 @@ tag_with_text(Tag, Text, {_, _, ParseTree} = _Response) ->
 %% @doc Compares the `Key' header in `Response' (HTTP or email) to `Value'.
 header(Key, Value, {_, _, Headers, _} = _Response) ->
     {proplists:get_value(Key, Headers) =:= Value,
-        "\""++Key++"\" header is not equal to \""++Value++"\""};
+        "\""++Key++"\" header is not equal to \""++ to_list_if_atom(Value) ++"\""};
 header(Key, Value, {Headers, _, _} = _Response) ->
-    {proplists:get_value(list_to_binary(Key), Headers) =:= list_to_binary(Value),
-        "\""++Key++"\" header is not equal to \""++Value++"\""}.
+    ListValue = to_list_if_atom(Value),
+    {proplists:get_value(list_to_binary(Key), Headers) =:= list_to_binary(ListValue),
+        "\""++Key++"\" header is not equal to \""++ListValue++"\""}.
 
 %% @spec location_header(Url, Response) -> {Passed, ErrorMessage}
 %% @doc Compares `Url' to the Location: header of `Response'.
@@ -200,3 +201,8 @@ has_tag_with_text(Tag, Text, [{Tag, _, [Text]}|_Rest]) ->
     true;
 has_tag_with_text(Tag, Text, [{_OtherTag, _, Children}|Rest]) ->
     has_tag_with_text(Tag, Text, Children) orelse has_tag_with_text(Tag, Text, Rest).
+
+to_list_if_atom(Value) when is_atom(Value) ->
+    atom_to_list(Value);
+to_list_if_atom(Value) ->
+    Value.
