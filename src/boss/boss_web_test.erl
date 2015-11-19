@@ -54,16 +54,23 @@ run_tests([Application, Adapter|TestList]) ->
     Pid = erlang:spawn(fun() -> app_info_loop(AppInfo) end),
     register(app_info, Pid),
     io:format("Found tests: ~p~n", [TestList]),
-    lists:map(fun(TestModule) ->
-                TestModuleAtom = list_to_atom(TestModule),
-                io:format("~nRunning: ~p~n", [TestModule]),
-                io:format("~-60s", ["Root test"]),
-                {NumSuccesses, FailureMessages} = TestModuleAtom:start(),
-                io:format("~70c~n", [$=]),
-                io:format("Passed: ~p~n", [NumSuccesses]),
-                io:format("Failed: ~p~n", [length(FailureMessages)])
-        end, TestList),
-    erlang:halt().
+    SomeTestsFailed = lists:foldl(fun(TestModule, SomeTestsFailedAcc) ->
+        TestModuleAtom = list_to_atom(TestModule),
+        io:format("~nRunning: ~p~n", [TestModule]),
+        io:format("~-60s", ["Root test"]),
+        {NumSuccesses, FailureMessages} = TestModuleAtom:start(),
+        NumberOfFailedTests = length(FailureMessages),
+        io:format("~70c~n", [$=]),
+        io:format("Passed: ~p~n", [NumSuccesses]),
+        io:format("Failed: ~p~n", [NumberOfFailedTests]),
+        SomeTestsFailedAcc orelse NumberOfFailedTests > 0
+    end, false, TestList),
+    if
+        SomeTestsFailed ->
+            erlang:halt(1);
+        true ->
+            erlang:halt()
+    end.
 
 %% @spec get_request(Url, Headers, Assertions, Continuations) -> [{NumPassed, ErrorMessages}]
 %% @doc This test issues an HTTP GET request to `Url' (a path such as "/"
