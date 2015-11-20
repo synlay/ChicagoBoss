@@ -54,7 +54,7 @@ run_tests([Application, Adapter|TestList]) ->
     Pid = erlang:spawn(fun() -> app_info_loop(AppInfo) end),
     register(app_info, Pid),
     io:format("Found tests: ~p~n", [TestList]),
-    SomeTestsFailed = lists:foldl(fun(TestModule, SomeTestsFailedAcc) ->
+    {SumSuccesses, SumFailures} = lists:foldl(fun(TestModule, {SuccessesAcc, FailuresAcc}) ->
         TestModuleAtom = list_to_atom(TestModule),
         io:format("~nRunning: ~p~n", [TestModule]),
         io:format("~-60s", ["Root test"]),
@@ -63,12 +63,15 @@ run_tests([Application, Adapter|TestList]) ->
         io:format("~70c~n", [$=]),
         io:format("Passed: ~p~n", [NumSuccesses]),
         io:format("Failed: ~p~n", [NumberOfFailedTests]),
-        SomeTestsFailedAcc orelse NumberOfFailedTests > 0
-    end, false, TestList),
+        {SuccessesAcc + NumSuccesses, FailuresAcc + NumberOfFailedTests}
+    end, {0, 0}, TestList),
+    io:format("~n~70c~n", [$=]),
     if
-        SomeTestsFailed ->
+        SumFailures > 0 ->
+            io:format("  ~c[01;31mFailed: ~p. ~c[00mPassed: ~p.~n", [16#1B, SumFailures, 16#1B, SumSuccesses]),
             erlang:halt(1);
         true ->
+            io:format("  ~c[01;32mAll ~p functional tests passed.~c[00m~n", [16#1B, SumSuccesses, 16#1B]),
             erlang:halt()
     end.
 
