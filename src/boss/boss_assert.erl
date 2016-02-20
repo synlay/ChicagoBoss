@@ -8,7 +8,9 @@
         http_redirect/1, 
         http_not_modified/1,
         http_bad_request/1,
+        http_unauthorized/1,
         http_not_found/1,
+        http_status/2,
         link_with_text/2, 
         tag_with_text/3,
         header/3,
@@ -88,10 +90,20 @@ http_not_modified({Status, _, _, _} = _Response) ->
 http_bad_request({Status, _, _, _} = _Response) ->
     {Status =:= 400, "HTTP Status not 400 Bad Request"}.
 
+%% @spec http_unauthorized(Response) -> {Passed, ErrorMessage}
+%% @doc Compares the HTTP status code in `Response' to 401 (HTTP Unauthorized).
+http_unauthorized({Status, _, _, _} = _Response) ->
+    {Status =:= 401, "HTTP Status not 401 Unauthorized"}.
+
 %% @spec http_not_found(Response) -> {Passed, ErrorMessage}
 %% @doc Compares the HTTP status code in `Response' to 404 (HTTP Not Found).
 http_not_found({Status, _, _, _} = _Response) ->
     {Status =:= 404, "HTTP Status not 404 Not Found"}.
+
+%% @spec http_status(Response) -> {Passed, ErrorMessage}
+%% @doc Compares the HTTP status code in `Response' to `ExpectedStatus'.
+http_status(ExpectedStatus, {Status, _, _, _} = _Response) ->
+    {ExpectedStatus =:= Status, lists:flatten(io_lib:format("HTTP Status is not ~w", [ExpectedStatus]))}.
 
 %% @spec link_with_text(Text, Response) -> {Passed, ErrorMessage}
 %% @doc Looks in `Response' for a link with text equal to `Text'. 
