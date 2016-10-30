@@ -407,7 +407,7 @@ request_loop_with_content(Method, AppInfo) ->
     receive
         {From, Uri, Headers, Body} ->
             erlang:put(mochiweb_request_body, Body),
-            erlang:put(mochiweb_request_body_length, length(Body)),
+            erlang:put(mochiweb_request_body_length, body_size(Body)),
             erlang:put(mochiweb_request_post, mochiweb_util:parse_qs(Body)),
             [{_, RouterPid, _, _}]	= supervisor:which_children(AppInfo#boss_app_info.router_sup_pid),
             [{_, TranslatorPid, _, _}]	= supervisor:which_children(AppInfo#boss_app_info.translator_sup_pid),
@@ -477,3 +477,12 @@ parse([Head|Tail], Body) ->
         {"Content-Type", "application/json"} -> mochijson2:decode(Body);
         _ -> parse(Tail, Body)
     end.
+
+%%--------------------------------------------------------------------
+%%% Internal functions
+%%--------------------------------------------------------------------
+
+body_size(Body) when is_list(Body) ->
+    length(Body);
+body_size(Body) when is_binary(Body) ->
+    byte_size(Body).
