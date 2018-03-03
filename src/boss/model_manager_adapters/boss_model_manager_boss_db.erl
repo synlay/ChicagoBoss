@@ -64,7 +64,9 @@ to_json(Object) ->
     ({Attr, Val}) when is_list (Val) ->
        {Attr, list_to_binary (Val)};
     ({Attr, {_,_,_} = Val}) ->
-       {Attr, iso8601:format(Val)};
+        %% date(); timestamps will be handled via epoch seconds for now. See OSP-37 for more infos on how
+        %%         to fix this proper.
+       {Attr, iso8601:format({Val, {0, 0, 0}})};
     ({Attr, {{_, _, _}, {_, _, _}} = Val}) ->
        {Attr, iso8601:format(Val)};
     (Other) ->
