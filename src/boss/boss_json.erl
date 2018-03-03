@@ -67,5 +67,10 @@ json_data1([{VariableName, Variable}|Rest], ModelList, Acc) ->
         true ->
             json_data1(Rest, ModelList, [{VariableName, boss_model_manager:to_json(Variable)}|Acc]);
         false ->
-            json_data1(Rest, ModelList, [{VariableName, Variable}|Acc])
+            case Variable of
+                {{Y,Mo,D}, {_H,_Mn,_S}} when is_integer(Y), is_integer(Mo), is_integer(D) ->
+                    json_data1(Rest, ModelList, [{VariableName, iso8601:format(Variable)}|Acc]);
+                _Other ->
+                    json_data1(Rest, ModelList, [{VariableName, Variable}|Acc])
+            end
     end.
