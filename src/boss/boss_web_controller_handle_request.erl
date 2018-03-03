@@ -133,6 +133,7 @@ build_dynamic_response(App, Bridge, Url, RouterAdapter) ->
     TranslatorPid    = boss_web:translator_pid(App),
     RouterPid        = boss_web:router_pid(App),
     ControllerList    = boss_files:web_controller_list(App),
+    DynamicRequestProcessedHook = boss_env:dynamic_request_processed_hook(),
     TR              = set_timer(Bridge,
                                 Url,
                                 Mode,
@@ -147,6 +148,7 @@ build_dynamic_response(App, Bridge, Url, RouterAdapter) ->
     RequestMethod    = Bridge:request_method(),
     FullUrl        = Bridge:path(),
     ErrorArgs        = [RequestMethod, FullUrl, App, StatusCode, Time div 1000],
+    _ = DynamicRequestProcessedHook(App, Bridge, StatusCode, Time),
     log_status_code(StatusCode, ErrorFormat, ErrorArgs),
     Response1        = Bridge:set_status_code(StatusCode),
     Response2        = lists:foldl(fun({K, V}, Acc) ->
