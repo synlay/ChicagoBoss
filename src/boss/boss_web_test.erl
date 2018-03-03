@@ -11,9 +11,12 @@
 %%-------------------------------------------------------------------
 
 -module(boss_web_test).
--export([start/1, run_tests/1, get_request/4, post_request/5, read_email/4]).
+-export([start/1, run_tests/1, get_request/4, head_request/4, options_request/4, post_request/5, put_request/5,
+         delete_request/4, read_email/4]).
 -export([follow_link/4, follow_redirect/3, follow_redirect/4, submit_form/5]).
 -export([find_link_with_text/2]).
+
+-compile({parse_transform, cut}).
 
 -include("boss_web.hrl").
 
@@ -62,44 +65,65 @@ run_tests([Application, Adapter|TestList]) ->
     Pid = erlang:spawn(fun() -> app_info_loop(AppInfo) end),
     register(app_info, Pid),
     io:format("Found tests: ~p~n", [TestList]),
-    lists:map(fun(TestModule) ->
-                TestModuleAtom = list_to_atom(TestModule),
-                io:format("~nRunning: ~p~n", [TestModule]),
-                io:format("~-60s", ["Root test"]),
-                {NumSuccesses, FailureMessages} = TestModuleAtom:start(),
-                io:format("~70c~n", [$=]),
-                io:format("Passed: ~p~n", [NumSuccesses]),
-                io:format("Failed: ~p~n", [length(FailureMessages)])
-        end, TestList),
-    erlang:halt().
+    SomeTestsFailed = lists:foldl(fun(TestModule, SomeTestsFailedAcc) ->
+        TestModuleAtom = list_to_atom(TestModule),
+        io:format("~nRunning: ~p~n", [TestModule]),
+        io:format("~-60s", ["Root test"]),
+        {NumSuccesses, FailureMessages} = TestModuleAtom:start(),
+        NumberOfFailedTests = length(FailureMessages),
+        io:format("~70c~n", [$=]),
+        io:format("Passed: ~p~n", [NumSuccesses]),
+        io:format("Failed: ~p~n", [NumberOfFailedTests]),
+        SomeTestsFailedAcc orelse NumberOfFailedTests > 0
+    end, false, TestList),
+    if
+        SomeTestsFailed ->
+            erlang:halt(1);
+        true ->
+            erlang:halt()
+    end.
 
 %% @spec get_request(Url, Headers, Assertions, Continuations) -> [{NumPassed, ErrorMessages}]
 %% @doc This test issues an HTTP GET request to `Url' (a path such as "/"
 %% -- no "http://" or domain name), passing in `RequestHeaders' to the
 %% server.
 get_request(Url, Headers, Assertions, Continuations) ->
-    app_info ! {self(), get_info},
-    receive
-        {_From, AppInfo} ->
-            RequesterPid = spawn(fun() -> get_request_loop(AppInfo) end),
-            link(RequesterPid),
-            RequesterPid ! {self(), Url, Headers},
-            receive_response(RequesterPid, Assertions, Continuations)
-    end.
+    generic_request_without_content(Url, Headers, Assertions, Continuations, request_loop_without_content('GET', _)).
+
+%% @spec head_request(Url, Headers, Assertions, Continuations) -> [{NumPassed, ErrorMessages}]
+%% @doc This test issues an HTTP HEAD request to `Url' (a path such as "/"
+%% -- no "http://" or domain name), passing in `RequestHeaders' to the
+%% server.
+head_request(Url, Headers, Assertions, Continuations) ->
+    generic_request_without_content(Url, Headers, Assertions, Continuations, request_loop_without_content('HEAD', _)).
+
+%% @spec options_request(Url, Headers, Assertions, Continuations) -> [{NumPassed, ErrorMessages}]
+%% @doc This test issues an HTTP OPTIONS request to `Url' (a path such as "/"
+%% -- no "http://" or domain name), passing in `RequestHeaders' to the
+%% server.
+options_request(Url, Headers, Assertions, Continuations) ->
+    generic_request_without_content(Url, Headers, Assertions, Continuations, request_loop_without_content('OPTIONS', _)).
+
+%% @spec delete_request(Url, Headers, Assertions, Continuations) -> [{NumPassed, ErrorMessages}]
+%% @doc This test issues an HTTP DELETE request to `Url' (a path such as "/"
+%% -- no "http://" or domain name), passing in `RequestHeaders' to the
+%% server.
+delete_request(Url, Headers, Assertions, Continuations) ->
+    generic_request_without_content(Url, Headers, Assertions, Continuations, request_loop_without_content('DELETE', _)).
+
+%% @spec put_request(Url, Headers, Contents, Assertions, Continuations) -> [{NumPassed, ErrorMessages}]
+%% @doc This test issues an HTTP PUT request to `Url' (a path such as "/"
+%% -- no "http://" or domain name), passing in `RequestHeaders' to the
+%% server, and `Contents' as the request body.
+put_request(Url, Headers, Contents, Assertions, Continuations) ->
+    generic_request_with_content(Url, Headers, Contents, Assertions, Continuations, request_loop_with_content('PUT', _)).
 
 %% @spec post_request(Url, Headers, Contents, Assertions, Continuations) -> [{NumPassed, ErrorMessages}]
 %% @doc This test issues an HTTP POST request to `Url' (a path such as "/"
 %% -- no "http://" or domain name), passing in `RequestHeaders' to the
 %% server, and `Contents' as the request body.
 post_request(Url, Headers, Contents, Assertions, Continuations) ->
-    app_info ! {self(), get_info},
-    receive
-        {_From, AppInfo} ->
-            RequesterPid = spawn(fun() -> post_request_loop(AppInfo) end),
-            link(RequesterPid),
-            RequesterPid ! {self(), Url, Headers, Contents},
-            receive_response(RequesterPid, Assertions, Continuations)
-    end.
+    generic_request_with_content(Url, Headers, Contents, Assertions, Continuations, request_loop_with_content('POST', _)).
 
 %% @spec follow_link(LinkName, Response, Assertions, Continuations) -> [{NumPassed, ErrorMessages}]
 %% @doc This test looks for a link labeled `LinkName' in `Response' and issues
@@ -339,11 +363,41 @@ app_info_loop(AppInfo) ->
             app_info_loop(AppInfo)
     end.
 
-get_request_loop(AppInfo) ->
+%% @spec generic_request_without_content(Url, Headers, Assertions, Continuations, RequestLoopFun) ->
+%%                                                                                          [{NumPassed, ErrorMessages}]
+%% @doc This test issues an generic HTTP request to `Url' (a path such as "/"
+%% -- no "http://" or domain name), passing in `RequestHeaders' to the
+%% server.
+generic_request_without_content(Url, Headers, Assertions, Continuations, RequestLoopFun) ->
+    app_info ! {self(), get_info},
+    receive
+        {_From, AppInfo} ->
+            RequesterPid = spawn(fun() -> RequestLoopFun(AppInfo) end),
+            link(RequesterPid),
+            RequesterPid ! {self(), Url, Headers},
+            receive_response(RequesterPid, Assertions, Continuations)
+    end.
+
+%% @spec generic_request_with_content(Url, Headers, Contents, Assertions, Continuations, RequestLoopFun) ->
+%%                                                                                          [{NumPassed, ErrorMessages}]
+%% @doc This test issues an generic HTTP request to `Url' (a path such as "/"
+%% -- no "http://" or domain name), passing in `RequestHeaders' to the
+%% server, and `Contents' as the request body.
+generic_request_with_content(Url, Headers, Contents, Assertions, Continuations, RequestLoopFun) ->
+    app_info ! {self(), get_info},
+    receive
+        {_From, AppInfo} ->
+            RequesterPid = spawn(fun() -> RequestLoopFun(AppInfo) end),
+            link(RequesterPid),
+            RequesterPid ! {self(), Url, Headers, Contents},
+            receive_response(RequesterPid, Assertions, Continuations)
+    end.
+
+request_loop_without_content(Method, AppInfo) ->
     put(boss_environment, testing),
     receive
         {From, Uri, Headers} ->
-            Req = make_request('GET', Uri, Headers),
+            Req = make_request(Method, Uri, Headers),
             FullUrl = Req:path(),
             [{_, RouterPid, _, _}] = supervisor:which_children(AppInfo#boss_app_info.router_sup_pid),
             [{_, TranslatorPid, _, _}] = supervisor:which_children(AppInfo#boss_app_info.translator_sup_pid),
@@ -353,21 +407,21 @@ get_request_loop(AppInfo) ->
                 Req, testing, FullUrl, RouterAdapter),
             From ! {self(), FullUrl, Result};
         Other ->
-            error_logger:error_msg("Unexpected message in get_request_loop: ~p~n", [Other])
+            error_logger:error_msg("Unexpected message in ~p_request_loop: ~p~n", [Method, Other])
     end.
 
-post_request_loop(AppInfo) ->
+request_loop_with_content(Method, AppInfo) ->
     put(boss_environment, testing),
     receive
         {From, Uri, Headers, Body} ->
             erlang:put(mochiweb_request_body, Body),
             erlang:put(mochiweb_request_body_length, length(Body)),
             erlang:put(mochiweb_request_post, mochiweb_util:parse_qs(Body)),
-            [{_, RouterPid, _, _}]    = supervisor:which_children(AppInfo#boss_app_info.router_sup_pid),
-            [{_, TranslatorPid, _, _}]    = supervisor:which_children(AppInfo#boss_app_info.translator_sup_pid),
-            RouterAdapter = boss_env:router_adapter(),
-            Req = make_request('POST', Uri,
-                   [{"Content-Encoding", "application/x-www-form-urlencoded"} | Headers]),
+            [{_, RouterPid, _, _}]	= supervisor:which_children(AppInfo#boss_app_info.router_sup_pid),
+            [{_, TranslatorPid, _, _}]	= supervisor:which_children(AppInfo#boss_app_info.translator_sup_pid),
+			RouterAdapter = boss_env:router_adapter(),
+            Req = make_request(Method, Uri,
+			       [{"Content-Encoding", "application/x-www-form-urlencoded"} | Headers]),
             FullUrl = Req:path(),
             Result = boss_web_controller_handle_request:process_request(AppInfo#boss_app_info{
                                router_pid     = RouterPid,
@@ -379,7 +433,7 @@ post_request_loop(AppInfo) ->
 
             From ! {self(), FullUrl, Result};
         Other ->
-            error_logger:error_msg("Unexpected message in post_request_loop: ~p~n", [Other])
+            error_logger:error_msg("Unexpected message in ~p_request_loop: ~p~n", [Method, Other])
     end.
 
 make_request(Method, Uri, Headers) ->
