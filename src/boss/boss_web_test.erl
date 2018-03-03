@@ -29,7 +29,7 @@ bootstrap_test_env(Application, Adapter) ->
                     _ -> Acc
                 end
         end, [], [db_port, db_host, db_username, db_password, db_database]),
-    ok = application:start(Application),
+    {ok, _Started} = application:ensure_all_started(Application),
     ControllerList     = boss_files:web_controller_list(Application),
     RouterAdapter     = boss_env:router_adapter(),
     {ok, RouterSupPid} = RouterAdapter:start([{application, Application},
