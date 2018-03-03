@@ -21,10 +21,15 @@
         http_redirect/1,
         http_not_modified/1,
         http_bad_request/1,
+        http_unauthorized/1,
         http_not_found/1,
+        http_status/2,
         link_with_text/2,
         tag_with_text/3,
         header/3,
+        header_unequal/3,
+        header_defined/2,
+        header_undefined/2,
         location_header/2,
         content_language_header/2,
         content_type_header/2,
@@ -37,6 +42,7 @@
         email_received/1,
         email_not_received/1]).
 
+-compile({parse_transform, cut}).
 
 -type http_information_code()  :: 100|101|102.
 -type http_success_code()      :: 200|201|202|204|206|207.
@@ -97,10 +103,20 @@ http_not_modified({Status, _, _, _} = _Response) ->
 http_bad_request({Status, _, _, _} = _Response) ->
     {Status =:= 400, "HTTP Status not 400 Bad Request"}.
 
+%% @spec http_unauthorized(Response) -> {Passed, ErrorMessage}
+%% @doc Compares the HTTP status code in `Response' to 401 (HTTP Unauthorized).
+http_unauthorized({Status, _, _, _} = _Response) ->
+    {Status =:= 401, "HTTP Status not 401 Unauthorized"}.
+
 %% @spec http_not_found(Response) -> {Passed, ErrorMessage}
 %% @doc Compares the HTTP status code in `Response' to 404 (HTTP Not Found).
 http_not_found({Status, _, _, _} = _Response) ->
     {Status =:= 404, "HTTP Status not 404 Not Found"}.
+
+%% @spec http_status(Response) -> {Passed, ErrorMessage}
+%% @doc Compares the HTTP status code in `Response' to `ExpectedStatus'.
+http_status(ExpectedStatus, {Status, _, _, _} = _Response) ->
+    {ExpectedStatus =:= Status, lists:flatten(io_lib:format("HTTP Status is not ~w", [ExpectedStatus]))}.
 
 %% @spec link_with_text(Text, Response) -> {Passed, ErrorMessage}
 %% @doc Looks in `Response' for a link with text equal to `Text'.
@@ -120,15 +136,31 @@ tag_with_text(Tag, Text, {_, _, _, ParseTree} = _Response) ->
 tag_with_text(Tag, Text, {_, _, ParseTree} = _Response) ->
     tag_with_text1(Tag, Text, ParseTree).
 
+%% @spec header_defined(Key, Response) -> {Passed, ErrorMessage}
+%% @doc Checks if the `Key' header in `Response' (HTTP or email) is defined.
+header_defined(Key, Response) ->
+    header_extract_helper(Key, undefined, Response, _ =/= _,
+                          fun(StrKey, _StrValue) -> "\""++StrKey++"\" header does not exist" end).
+
+%% @spec header_undefined(Key, Response) -> {Passed, ErrorMessage}
+%% @doc Checks if the `Key' header in `Response' (HTTP or email) is not defined.
+header_undefined(Key, Response) ->
+    header_extract_helper(Key, undefined, Response, _ =:= _,
+                          fun(StrKey, _StrValue) -> "\""++StrKey++"\" header should not exist" end).
+
 %% @spec header(Key, Value, Response) -> {Passed, ErrorMessage}
 %% @doc Compares the `Key' header in `Response' (HTTP or email) to `Value'.
-header(Key, Value, {_, _, Headers, _} = _Response) ->
-    {proplists:get_value(Key, Headers) =:= Value,
-        "\""++Key++"\" header is not equal to \""++ to_list_if_atom(Value) ++"\""};
-header(Key, Value, {Headers, _, _} = _Response) ->
-    ListValue = to_list_if_atom(Value),
-    {proplists:get_value(list_to_binary(Key), Headers) =:= list_to_binary(ListValue),
-        "\""++Key++"\" header is not equal to \""++ListValue++"\""}.
+header(Key, Value, Response) ->
+    header_extract_helper(Key, Value, Response, _ =:= _,
+                          fun(StrKey, StrValue) -> "\""++StrKey++"\" header is not equal to \""++StrValue++"\"" end).
+
+%% @spec header_unequal(Key, Value, Response) -> {Passed, ErrorMessage}
+%% @doc Checks if the `Key' header in `Response' (HTTP or email) is not equal to `Value'.
+header_unequal(Key, Value, Response) ->
+    header_extract_helper(Key, Value, Response, _ =/= _,
+                          fun(StrKey, StrValue) ->
+                              "\""++StrKey++"\" header should not be equal to \""++StrValue++"\""
+                          end).
 
 %% @spec location_header(Url, Response) -> {Passed, ErrorMessage}
 %% @doc Compares `Url' to the Location: header of `Response'.
@@ -215,7 +247,19 @@ has_tag_with_text(Tag, Text, [{Tag, _, [Text]}|_Rest]) ->
 has_tag_with_text(Tag, Text, [{_OtherTag, _, Children}|Rest]) ->
     has_tag_with_text(Tag, Text, Children) orelse has_tag_with_text(Tag, Text, Rest).
 
-to_list_if_atom(Value) when is_atom(Value) ->
+header_helper(Key, Value, Headers, CompareFunc, MessageFunc) ->
+    {CompareFunc(proplists:get_value(Key, Headers), Value), MessageFunc(maybe_to_list(Key), maybe_to_list(Value))}.
+
+header_extract_helper(Key, Value, {_, _, Headers, _} = _Response, CompareFunc, MessageFunc) ->
+    header_helper(Key, Value, Headers, CompareFunc, MessageFunc);
+header_extract_helper(Key, undefined, {Headers, _, _} = _Response, CompareFunc, MessageFunc) ->
+    header_helper(list_to_binary(Key), undefined, Headers, CompareFunc, MessageFunc);
+header_extract_helper(Key, Value, {Headers, _, _} = _Response, CompareFunc, MessageFunc) ->
+    header_helper(list_to_binary(Key), list_to_binary(Value), Headers, CompareFunc, MessageFunc).
+
+maybe_to_list(Value) when is_atom(Value) ->
     atom_to_list(Value);
-to_list_if_atom(Value) ->
+maybe_to_list(Value) when is_binary(Value) ->
+    binary_to_list(Value);
+maybe_to_list(Value) when is_list(Value) ->
     Value.
